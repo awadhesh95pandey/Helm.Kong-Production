@@ -1,0 +1,202 @@
+{{- if .Values.kong.declarativeConfig.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kong-deck-config-loader
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: deck-loader
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: kong
+        component: deck-loader
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      initContainers:
+      - name: wait-for-kong
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Kong Gateway to be ready..."
+          until nc -z kong-admin.{{ .Values.namespace.name }}.svc.cluster.local 8001; do
+            echo "Kong Admin API not ready yet..."
+            sleep 5
+          done
+          echo "Kong Admin API is ready!"
+          sleep 10
+      containers:
+      - name: deck-loader
+        image: kong/deck:v1.51.1
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "Starting decK configuration loader..."
+          
+          # Set Kong Admin URL (internal access only)
+          export KONG_ADDR=http://kong-admin.{{ .Values.namespace.name }}.svc.cluster.local:8001
+          
+          # Merge all configuration files
+          echo "Merging configuration files..."
+          
+          # Check which config files exist and merge them
+          CONFIG_FILES=""
+          [ -f /config/services/services.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/services/services.yaml"
+          [ -f /config/plugins/plugins.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/plugins/plugins.yaml"
+          [ -f /config/consumers/consumers.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/consumers/consumers.yaml"
+          [ -f /config/upstreams/upstreams.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/upstreams/upstreams.yaml"
+          
+          if [ -z "$CONFIG_FILES" ]; then
+            echo "ERROR: No configuration files found!"
+            exit 1
+          fi
+          
+          echo "Found config files: $CONFIG_FILES"
+          deck file merge $CONFIG_FILES -o /tmp/kong-merged.yaml
+          
+          # Validate merged configuration
+          echo "Validating configuration..."
+          deck validate -s /tmp/kong-merged.yaml --kong-addr $KONG_ADDR
+          
+          # Show what will be changed
+          echo "Checking differences..."
+          deck diff -s /tmp/kong-merged.yaml --kong-addr $KONG_ADDR --select-tag production || true
+          
+          # Apply configuration
+          echo "Applying Kong configuration..."
+          deck sync -s /tmp/kong-merged.yaml --kong-addr $KONG_ADDR --select-tag production --verbose 1
+          
+          # Verify configuration
+          echo ""
+          echo "Configuration applied successfully!"
+          echo "Services count: $(curl -s $KONG_ADDR/services | jq '.data | length')"
+          echo "Routes count: $(curl -s $KONG_ADDR/routes | jq '.data | length')"
+          echo "Plugins count: $(curl -s $KONG_ADDR/plugins | jq '.data | length')"
+          echo "Consumers count: $(curl -s $KONG_ADDR/consumers | jq '.data | length')"
+        volumeMounts:
+        - name: services-config
+          mountPath: /config/services
+        - name: plugins-config
+          mountPath: /config/plugins
+        - name: consumers-config
+          mountPath: /config/consumers
+        - name: upstreams-config
+          mountPath: /config/upstreams
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: services-config
+        configMap:
+          name: kong-services-config
+      - name: plugins-config
+        configMap:
+          name: kong-plugins-config
+      - name: consumers-config
+        configMap:
+          name: kong-consumers-config
+      - name: upstreams-config
+        configMap:
+          name: kong-upstreams-config
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kong-deck-sync
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: deck-sync
+spec:
+  schedule: "{{ .Values.kong.declarativeConfig.syncSchedule }}"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: {{ .Values.serviceAccount.name }}
+          containers:
+          - name: deck-sync
+            image: kong/deck:v1.51.1
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              export KONG_ADDR=http://kong-admin.{{ .Values.namespace.name }}.svc.cluster.local:8001
+              
+              # Merge configurations
+              CONFIG_FILES=""
+              [ -f /config/services/services.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/services/services.yaml"
+              [ -f /config/plugins/plugins.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/plugins/plugins.yaml"
+              [ -f /config/consumers/consumers.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/consumers/consumers.yaml"
+              [ -f /config/upstreams/upstreams.yaml ] && CONFIG_FILES="$CONFIG_FILES /config/upstreams/upstreams.yaml"
+              
+              if [ -z "$CONFIG_FILES" ]; then
+                echo "ERROR: No configuration files found!"
+                exit 1
+              fi
+              
+              deck file merge $CONFIG_FILES -o /tmp/kong-merged.yaml
+              
+              # Check for drift
+              DIFF_OUTPUT=$(deck diff -s /tmp/kong-merged.yaml --kong-addr $KONG_ADDR --select-tag production 2>&1 || true)
+              
+              if echo "$DIFF_OUTPUT" | grep -q "no differences"; then
+                echo "No configuration drift detected"
+              else
+                echo "Configuration drift detected, applying sync..."
+                deck sync -s /tmp/kong-merged.yaml --kong-addr $KONG_ADDR --select-tag production --verbose 1
+                echo "Sync completed"
+              fi
+            volumeMounts:
+            - name: services-config
+              mountPath: /config/services
+            - name: plugins-config
+              mountPath: /config/plugins
+            - name: consumers-config
+              mountPath: /config/consumers
+            - name: upstreams-config
+              mountPath: /config/upstreams
+            resources:
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+          volumes:
+          - name: services-config
+            configMap:
+              name: kong-services-config
+          - name: plugins-config
+            configMap:
+              name: kong-plugins-config
+          - name: consumers-config
+            configMap:
+              name: kong-consumers-config
+          - name: upstreams-config
+            configMap:
+              name: kong-upstreams-config
+{{- end }}

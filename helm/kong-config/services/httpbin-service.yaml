@@ -1,0 +1,40 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: httpbin-service
+    url: https://httpbin.org
+    protocol: https
+    port: 443
+    retries: 3
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+    tags:
+      - production
+      - test-service
+    routes:
+      - name: httpbin-headers-route
+        paths:
+          - /api/test/headers
+        strip_path: true
+        methods:
+          - GET
+          - POST
+        preserve_host: false
+        tags:
+          - production
+          - headers-test
+      - name: httpbin-anything-route
+        paths:
+          - /api/test/anything
+        strip_path: true
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        preserve_host: false
+        tags:
+          - production
+          - test-route

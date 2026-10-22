@@ -1,0 +1,187 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Allow ingress traffic to Kong proxy only from external sources
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kong-proxy-ingress
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: kong
+      component: gateway
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow external traffic to proxy ports
+  - from: []  # Allow from anywhere (LoadBalancer will handle external traffic)
+    ports:
+    - protocol: TCP
+      port: 8000  # HTTP
+    - protocol: TCP
+      port: 8443  # HTTPS
+  # Allow internal health checks
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8100  # Status/health
+---
+# Restrict Kong Admin API access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kong-admin-restrict
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: kong
+      component: gateway
+  policyTypes:
+  - Ingress
+  ingress:
+  # Only allow deck and internal pods to access admin API
+  - from:
+    - podSelector:
+        matchLabels:
+          component: deck-loader
+    - podSelector:
+        matchLabels:
+          component: deck-sync
+    ports:
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 8444
+---
+# PostgreSQL access restriction
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-restrict
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow Kong pods and migration jobs to access PostgreSQL
+  - from:
+    - podSelector:
+        matchLabels:
+          app: kong
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: migrations
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# Default deny all ingress for backend services (example)
+# This ensures backends can only be accessed through Kong
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-services-deny-direct
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      tier: backend  # Apply to all backend services with this label
+  policyTypes:
+  - Ingress
+  ingress:
+  # Only allow traffic from Kong gateway
+  - from:
+    - podSelector:
+        matchLabels:
+          app: kong
+          component: gateway
+    ports:
+    - protocol: TCP
+      port: 80  # Httpbin port
+    - protocol: TCP
+      port: 8080  # Other backend services
+    - protocol: TCP
+      port: 8082 # THIS for nbfc-app
+---
+# Egress policy for Kong (optional - restrict external calls)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kong-egress-control
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: kong
+      component: gateway
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow Kong to reach React ERP UI in prod-erp-ui (react-erp-ui:3000)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: prod-erp-ui
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow Kong to reach the prod ERP APIs in prod-erp-services on port 8080:
+  # pdl-abf-api, pdl-authentication-api, pdl-collection-api, pdl-ficaseservice-api,
+  # pdl-hrmsservices-api, pdl-managementservice-api, pdl-master-api,
+  # pdl-mobilecolending-api, pdl-reportservice-api, pdl-sod-eod-api
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: prod-erp-services
+    ports:
+    - protocol: TCP
+      port: 8080
+  # pdl-mailingmonk-api Service port is 8080; the pod containerPort is 9000.
+  # GKE evaluates egress after Service DNAT, so the allowed port is 9000.
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: pdl-bulk-mailing
+    ports:
+    - protocol: TCP
+      port: 9000
+{{- end }}

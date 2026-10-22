@@ -1,0 +1,114 @@
+# Secrets and sensitive data
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+**/secrets/
+**/credentials/
+.env
+.env.*
+!.env.example
+
+# Helm
+helm/charts/
+helm/tmpcharts/
+*.tgz
+*.lock
+
+# Values files with secrets
+values-secrets.yaml
+values-*.secret.yaml
+*-secret.yaml
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+.project
+.settings/
+
+# Terraform (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Documentation build
+docs/_build/
+site/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.coverage
+.pytest_cache/
+.tox/
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Ignore local override files
+*-local.yaml
+local-values.yaml
+
+# Ignore rendered manifests
+rendered/
+output/
+
+# Auth0 credentials
+auth0-config.json
+.auth0/
+
+# GCP/AWS/Azure credentials
+gcp-key.json
+aws-credentials
+azure-credentials.json

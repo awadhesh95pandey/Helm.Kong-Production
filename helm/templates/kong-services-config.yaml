@@ -1,0 +1,66 @@
+{{- if .Values.kong.declarativeConfig.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-services-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: services-config
+data:
+  services.yaml: |
+    _format_version: "3.0"
+    _transform: true
+    
+    services:
+    {{- range .Values.kong.services }}
+      - name: {{ .name }}
+        {{- if .url }}
+        url: {{ .url }}
+        {{- else }}
+        host: {{ .host }}
+        {{- if .path }}
+        path: {{ .path }}
+        {{- end }}
+        {{- end }}
+        protocol: {{ .protocol | default "http" }}
+        port: {{ .port | default 80 }}
+        retries: {{ .retries | default 3 }}
+        connect_timeout: {{ .connectTimeout | default 60000 }}
+        write_timeout: {{ .writeTimeout | default 60000 }}
+        read_timeout: {{ .readTimeout | default 60000 }}
+        {{- if .tags }}
+        tags:
+        {{- range .tags }}
+          - {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .routes }}
+        routes:
+        {{- range .routes }}
+          - name: {{ .name }}
+            paths:
+            {{- range .paths }}
+              - {{ . | quote }}
+            {{- end }}
+            strip_path: {{ .stripPath | default false }}
+            preserve_host: {{ .preserveHost | default false }}
+            regex_priority: {{ .regexPriority | default 0 }}
+            {{- if .methods }}
+            methods:
+            {{- range .methods }}
+              - {{ . }}
+            {{- end }}
+            {{- end }}
+            {{- if .tags }}
+            tags:
+            {{- range .tags }}
+              - {{ . }}
+            {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}

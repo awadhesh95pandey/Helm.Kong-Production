@@ -1,0 +1,83 @@
+{{- if .Values.kong.declarativeConfig.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-upstreams-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: upstreams-config
+data:
+  upstreams.yaml: |
+    _format_version: "3.0"
+    _transform: true
+    
+    upstreams:
+    {{- if not .Values.kong.upstreams }} []{{ end }}
+    {{- range .Values.kong.upstreams }}
+      - name: {{ .name }}
+        algorithm: {{ .algorithm | default "round-robin" }}
+        slots: {{ .slots | default 10000 }}
+        {{- if .healthchecks }}
+        healthchecks:
+          {{- if .healthchecks.active }}
+          active:
+            type: {{ .healthchecks.active.type }}
+            http_path: {{ .healthchecks.active.httpPath }}
+            healthy:
+              interval: {{ .healthchecks.active.healthy.interval }}
+              successes: {{ .healthchecks.active.healthy.successes }}
+              http_statuses:
+              {{- range .healthchecks.active.healthy.httpStatuses }}
+                - {{ . }}
+              {{- end }}
+            unhealthy:
+              interval: {{ .healthchecks.active.unhealthy.interval }}
+              tcp_failures: {{ .healthchecks.active.unhealthy.tcpFailures }}
+              http_failures: {{ .healthchecks.active.unhealthy.httpFailures }}
+              timeouts: {{ .healthchecks.active.unhealthy.timeouts }}
+              http_statuses:
+              {{- range .healthchecks.active.unhealthy.httpStatuses }}
+                - {{ . }}
+              {{- end }}
+          {{- end }}
+          {{- if .healthchecks.passive }}
+          passive:
+            type: {{ .healthchecks.passive.type }}
+            healthy:
+              successes: {{ .healthchecks.passive.healthy.successes }}
+              http_statuses:
+              {{- range .healthchecks.passive.healthy.httpStatuses }}
+                - {{ . }}
+              {{- end }}
+            unhealthy:
+              tcp_failures: {{ .healthchecks.passive.unhealthy.tcpFailures }}
+              timeouts: {{ .healthchecks.passive.unhealthy.timeouts }}
+              http_failures: {{ .healthchecks.passive.unhealthy.httpFailures }}
+              http_statuses:
+              {{- range .healthchecks.passive.unhealthy.httpStatuses }}
+                - {{ . }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+        targets:
+        {{- range .targets }}
+          - target: {{ .target }}
+            weight: {{ .weight | default 100 }}
+            {{- if .tags }}
+            tags:
+            {{- range .tags }}
+              - {{ . }}
+            {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- if .tags }}
+        tags:
+        {{- range .tags }}
+          - {{ . }}
+        {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}

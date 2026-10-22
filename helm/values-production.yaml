@@ -1,0 +1,871 @@
+# Production Values for Kong Gateway
+# This file contains all production configuration including services, plugins, consumers, and upstreams
+
+global:
+  environment: production
+  domain: finone.paisalo.in
+  tlsEnabled: true
+
+namespace:
+  create: true
+  name: kong-production
+
+serviceAccount:
+  create: true
+  name: kong-gateway
+
+kong:
+  database: postgres  # Use PostgreSQL for production
+  replicaCount: 1
+  
+  # JWKS configuration for automatic key rotation
+  jwks:
+    url: https://devtush4r.us.auth0.com/.well-known/jwks.json
+    issuer: https://devtush4r.us.auth0.com/
+  
+  image:
+    repository: kong/kong
+    tag: "3.4"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  env:
+    log_level: "info"  # Changed from warn to info for audit logging
+    nginx_worker_processes: "auto"
+    mem_cache_size: "256m"
+    # Audit logging configuration
+    admin_access_log: "/dev/stdout"
+    admin_error_log: "/dev/stderr"
+    proxy_access_log: "/dev/stdout"
+    proxy_error_log: "/dev/stderr"
+    # Log format with more details
+    nginx_http_log_format: 'json ''{"timestamp":"$time_iso8601","client":"$remote_addr","method":"$request_method","uri":"$request_uri","status":$status,"latency":$request_time,"user":"$http_x_consumer_username"}'''
+    # Required for swagger IP restriction (pre-function plugin)
+    untrusted_lua: sandbox
+  
+  service:
+    type: LoadBalancer
+    loadBalancerIP: "35.200.243.33"
+    # Preserve the real client IP (default Cluster SNATs to a node IP and breaks IP allowlists)
+    externalTrafficPolicy: Local
+    annotations:
+      service.beta.kubernetes.io/gcp-load-balancer-type: "External"
+  
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 5
+  
+  # Declarative configuration management
+  declarativeConfig:
+    enabled: true
+    syncSchedule: "0 */4 * * *"  # Sync every 4 hours
+  
+  # Services configuration
+  services:
+    # Prod ERP APIs in prod-erp-services, the ERP UI in prod-erp-ui,
+    # and pdl-mailingmonk-api in pdl-bulk-mailing.
+    # ── PDL COLLECTION API (.NET) ────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/pdlcollection
+    - name: pdl-collection-api-service
+      url: http://pdl-collection-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 120000
+      readTimeout: 120000
+      tags:
+        - production
+        - nbfc
+        - collection
+        - dotnet
+      routes:
+        - name: pdl-collection-api-route
+          paths:
+            - /pdlcollection
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - collection
+            - dotnet
+
+    # ── PDL AUTHENTICATION API ───────────────────────────────────────────────────
+    - name: pdl-authentication-api-service
+      url: http://pdl-authentication-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 120000
+      readTimeout: 120000
+      tags:
+        - production
+        - nbfc
+        - authentication
+        - dotnet
+      routes:
+        - name: pdl-authentication-api-route
+          paths:
+            - /authentication
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - authentication
+
+    # ── PDL HRMS SERVICES API ────────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/hrmsservices
+    - name: pdl-hrmsservices-api-service
+      url: http://pdl-hrmsservices-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - hrmsservices
+        - dotnet
+      routes:
+        - name: pdl-hrmsservices-api-route
+          paths:
+            - /hrmsservices
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - hrmsservices
+
+    # ── PDL MASTER (FIMaster) API ────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/master
+    - name: pdl-master-api-service
+      url: http://pdl-master-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 120000
+      readTimeout: 120000
+      tags:
+        - production
+        - nbfc
+        - master
+        - dotnet
+      routes:
+        - name: pdl-master-api-route
+          paths:
+            - /master
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - master
+
+    # ── PDL FI CASE SERVICE API ──────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/ficaseservice
+    - name: pdl-ficaseservice-api-service
+      url: http://pdl-ficaseservice-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - ficaseservice
+        - dotnet
+      routes:
+        - name: pdl-ficaseservice-api-route
+          paths:
+            - /ficaseservice
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - ficaseservice
+
+    # ── PDL ABF API ──────────────────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/abf
+    - name: pdl-abf-api-service
+      url: http://pdl-abf-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - abf
+        - dotnet
+      routes:
+        - name: pdl-abf-api-route
+          paths:
+            - /abf
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - abf
+
+    # ── PDL REPORT SERVICE API ───────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/reportservice
+    - name: pdl-reportservice-api-service
+      url: http://pdl-reportservice-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - reportservice
+        - dotnet
+      routes:
+        - name: pdl-reportservice-api-route
+          paths:
+            - /reportservice
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - reportservice
+
+    # ── PDL SOD EOD API ──────────────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/sodeod
+    - name: pdl-sod-eod-api-service
+      url: http://pdl-sod-eod-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - sodeod
+        - dotnet
+      routes:
+        - name: pdl-sod-eod-api-route
+          paths:
+            - /sodeod
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - sodeod
+
+    # ── PDL MANAGEMENT SERVICE API ───────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/PDLManagement
+    # App UsePathBase is /PDLManagement; Kong strips it before proxying to the pod.
+    - name: pdl-managementservice-api-service
+      url: http://pdl-managementservice-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - managementservice
+        - dotnet
+      routes:
+        - name: pdl-managementservice-api-route
+          paths:
+            - /PDLManagement
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - managementservice
+
+    # ── PDL MOBILE COLENDING API ─────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/mobilecolending
+    - name: pdl-mobilecolending-api-service
+      url: http://pdl-mobilecolending-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - mobilecolending
+        - dotnet
+      routes:
+        - name: pdl-mobilecolending-api-route
+          paths:
+            - /mobilecolending
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - mobilecolending
+
+    # ── REACT ERP UI ─────────────────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/erp
+    # React package.json homepage is /erp, so Kong must keep that prefix.
+    - name: react-erp-ui-service
+      url: http://react-erp-ui.prod-erp-ui.svc.cluster.local:3000
+      protocol: http
+      port: 3000
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 120000
+      readTimeout: 120000
+      tags:
+        - production
+        - ui
+        - erp
+      routes:
+        - name: react-erp-ui-route
+          paths:
+            - /erp
+          stripPath: false
+          methods:
+            - GET
+            - HEAD
+            - OPTIONS
+          # Keep public Host (finone.paisalo.in) — avoids redirects to *.svc.cluster.local
+          preserveHost: true
+          regexPriority: 0
+          tags:
+            - production
+            - ui
+            - erp
+
+    # ── PDL MAILING MONK API ─────────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/pdlmailing
+    # Backend: pdl-mailingmonk-api in namespace pdl-bulk-mailing
+    - name: pdl-mailingmonk-api-service
+      url: http://pdl-mailingmonk-api.pdl-bulk-mailing.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - mailing
+        - dotnet
+      routes:
+        - name: pdl-mailingmonk-api-route
+          paths:
+            - /pdlmailing
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - mailing
+        # listmonk emits root paths (/public/static/style.css, /public/custom.js).
+        # Keep the prefix so those files reach the pod unchanged.
+        - name: pdl-mailingmonk-public-route
+          paths:
+            - /public
+          stripPath: false
+          methods:
+            - GET
+            - HEAD
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - mailing
+
+
+  # Consumers configuration
+  consumers:
+    - username: auth0-consumer
+      customId: auth0-consumer-001
+      tags:
+        - auth0
+        - production
+    
+    - username: test-consumer
+      customId: test-consumer-001
+      tags:
+        - test
+        - production
+  
+  # Plugins configuration
+  plugins:
+    # Global rate limiting for all requests (including unauthenticated)
+    globalRateLimiting:
+      enabled: true
+      second: 10000
+      minute: 100000
+      hour: 10000000
+      policy: local
+      faultTolerant: true
+      limitBy: ip
+    
+    jwt:
+      enabled: false
+      services: []
+      config:
+        uriParamNames: []
+        cookieNames: []
+        headerNames:
+          - authorization
+        claimsToVerify:
+          - exp
+        keyClaimName: iss
+        secretIsBase64: false
+        anonymous: null
+        runOnPreflight: false
+        maximumExpiration: 86400  # 24 hours
+        algorithm: RS256
+    
+    rateLimiting:
+      enabled: true
+      policy: local  # Use 'redis' for distributed rate limiting
+      faultTolerant: true
+      hideClientHeaders: false
+      limitBy: consumer
+      headerName: X-RateLimit
+      services:
+        - name: pdl-collection-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-authentication-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-hrmsservices-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-master-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-ficaseservice-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-abf-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-reportservice-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-sod-eod-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-managementservice-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: pdl-mobilecolending-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+        - name: react-erp-ui-service
+          limits:
+            second: 1000
+            minute: 10000
+            hour: 100000
+            day: 1000000
+        - name: pdl-mailingmonk-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
+      redis:
+        host: null
+        port: 6379
+        password: null
+        timeout: 2000
+        database: 0
+    
+    requestTransformer:
+      enabled: true
+      # IMPORTANT: langfuse-service is intentionally excluded
+      # Adding it would overwrite the Basic Auth header that Spring Boot sends
+      # litellm-service uses its own API key — do NOT add Authorization header here
+      services:
+        - name: pdl-collection-api-service
+          forwardedPrefix: /pdlcollection
+        - name: pdl-authentication-api-service
+          forwardedPrefix: /authentication
+        - name: pdl-hrmsservices-api-service
+          forwardedPrefix: /hrmsservices
+        - name: pdl-master-api-service
+          forwardedPrefix: /master
+        - name: pdl-ficaseservice-api-service
+          forwardedPrefix: /ficaseservice
+        - name: pdl-abf-api-service
+          forwardedPrefix: /abf
+        - name: pdl-reportservice-api-service
+          forwardedPrefix: /reportservice
+        - name: pdl-sod-eod-api-service
+          forwardedPrefix: /sodeod
+        - name: pdl-managementservice-api-service
+          forwardedPrefix: /PDLManagement
+        - name: pdl-mobilecolending-api-service
+          forwardedPrefix: /mobilecolending
+        - name: pdl-mailingmonk-api-service
+          forwardedPrefix: /pdlmailing
+      config:
+        add:
+          headers:
+            - X-Gateway:Kong-3.4-Production
+            - X-Forwarded-Proto:https
+            - X-Forwarded-Host:finone.paisalo.in
+            - X-Forwarded-Port:443
+
+    responseTransformer:
+      enabled: true
+      services:
+        - pdl-collection-api-service
+        - pdl-authentication-api-service
+        - pdl-hrmsservices-api-service
+        - pdl-master-api-service
+        - pdl-ficaseservice-api-service
+        - pdl-abf-api-service
+        - pdl-reportservice-api-service
+        - pdl-sod-eod-api-service
+        - pdl-managementservice-api-service
+        - pdl-mobilecolending-api-service
+        - pdl-mailingmonk-api-service
+      config:
+        add:
+          headers:
+            - Cache-Control:no-cache, no-store, must-revalidate
+            - X-Content-Type-Options:nosniff
+            - X-Frame-Options:DENY
+            - X-XSS-Protection:1; mode=block
+            - Strict-Transport-Security:max-age=31536000; includeSubDomains
+        remove:
+          headers:
+            - Server
+            - X-Powered-By
+    
+    cors:
+      enabled: true
+      services:
+        - pdl-collection-api-service
+        - pdl-authentication-api-service
+        - pdl-hrmsservices-api-service
+        - pdl-master-api-service
+        - pdl-ficaseservice-api-service
+        - pdl-abf-api-service
+        - pdl-reportservice-api-service
+        - pdl-sod-eod-api-service
+        - pdl-managementservice-api-service
+        - pdl-mobilecolending-api-service
+        - pdl-mailingmonk-api-service
+      config:
+        origins:
+          - https://finone.paisalo.in 
+          - https://predeptest.paisalo.in:8084   # QuantumUI collection frontend
+          - https://app.nbfc.com
+          - https://admin.nbfc.com
+          - https://developer.nbfc.com
+          - http://localhost:3000
+          - http://localhost:8082   # Spring Boot local dev
+          - https://beta.paisalo.in:4016
+          - https://testerp.paisalo.in:8825
+          - https://predemoui.paisalo.in:4022
+        methods:
+          - GET
+          - HEAD
+          - PUT
+          - PATCH
+          - POST
+          - DELETE
+          - OPTIONS
+        headers:
+          - Accept
+          - Accept-Version
+          - Accept-Language
+          - Content-Length
+          - Content-Type
+          - Date
+          - Authorization
+          - X-Request-ID
+          - X-Correlation-Id
+          - X-Page-Id
+          - X-Scheduler-Token
+        exposedHeaders:
+          - X-Auth-Token
+          - X-RateLimit-Limit-Minute
+          - X-RateLimit-Limit-Hour
+          - X-RateLimit-Remaining-Minute
+          - X-RateLimit-Remaining-Hour
+        credentials: true
+        maxAge: 3600
+        preflightContinue: false
+    
+    prometheus:
+      enabled: true
+      config:
+        statusCodeMetrics: true
+        latencyMetrics: true
+        bandwidthMetrics: true
+        upstreamHealthMetrics: true
+        perConsumer: true
+    
+    botDetection:
+      enabled: true
+      config:
+        allow:
+          - "(Uptime Robot)"
+          - "(Pingdom.com)"
+          - "(Google Cloud Monitoring)"
+          - "(okhttp)" 
+          - "(Java)" 
+        deny:
+          - "(bot|crawler|spider|scraper)"
+    
+    # Allow Swagger / OpenAPI UI only from these public IPs
+    swaggerIpRestriction:
+      enabled: true
+      allow:
+        - "124.123.16.234"
+        - "124.123.16.235"
+      pathContains:
+        - "/swagger"
+        - "/api-docs"
+        - "/openapi.json"
+        - "/openapi.yaml"
+        - "/redoc"
+
+    # HRMS allows large document uploads; keep room above default API payloads
+    requestSizeLimiting:
+      enabled: true
+      config:
+        allowedPayloadSize: 100
+        sizeUnit: megabytes
+        requireContentLength: false
+  
+  # No Kong upstreams. Routes use service DNS directly.
+  upstreams: []
+
+# Httpbin test service (for internal testing)
+httpbin:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: kennethreitz/httpbin
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "14-alpine"
+  auth:
+    database: kong
+    username: kong
+    existingSecret: ""
+  persistence:
+    enabled: true
+    storageClass: standard
+    size: 10Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Network Policy Configuration
+networkPolicy:
+  enabled: true  # Enable network policies to restrict traffic
+
+# Pod affinity for high availability
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - kong-gateway
+        topologyKey: kubernetes.io/hostname
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE

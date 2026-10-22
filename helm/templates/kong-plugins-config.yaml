@@ -1,0 +1,302 @@
+{{- if .Values.kong.declarativeConfig.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-plugins-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: plugins-config
+data:
+  plugins.yaml: |
+    _format_version: "3.0"
+    _transform: true
+    
+    plugins:
+    {{- if .Values.kong.plugins.globalRateLimiting.enabled }}
+      # Global rate limiting for unauthenticated requests
+      - name: rate-limiting
+        enabled: true
+        config:
+          second: {{ .Values.kong.plugins.globalRateLimiting.second | default 5 }}
+          minute: {{ .Values.kong.plugins.globalRateLimiting.minute | default 30 }}
+          hour: {{ .Values.kong.plugins.globalRateLimiting.hour | default 500 }}
+          policy: {{ .Values.kong.plugins.globalRateLimiting.policy | default "local" }}
+          fault_tolerant: {{ .Values.kong.plugins.globalRateLimiting.faultTolerant | default true }}
+          hide_client_headers: false
+          limit_by: {{ .Values.kong.plugins.globalRateLimiting.limitBy | default "ip" }}
+        tags:
+          - global-rate-limit
+          - security
+          - production
+    {{- end }}
+    {{- if .Values.kong.plugins.jwt.enabled }}
+    {{- range .Values.kong.plugins.jwt.services }}
+      - name: jwt
+        enabled: true
+        service: {{ . }}
+        config:
+          uri_param_names: {{ $.Values.kong.plugins.jwt.config.uriParamNames | toJson }}
+          cookie_names: {{ $.Values.kong.plugins.jwt.config.cookieNames | toJson }}
+          header_names:
+          {{- range $.Values.kong.plugins.jwt.config.headerNames }}
+            - {{ . }}
+          {{- end }}
+          claims_to_verify:
+          {{- range $.Values.kong.plugins.jwt.config.claimsToVerify }}
+            - {{ . }}
+          {{- end }}
+          key_claim_name: {{ $.Values.kong.plugins.jwt.config.keyClaimName }}
+          secret_is_base64: {{ $.Values.kong.plugins.jwt.config.secretIsBase64 }}
+          anonymous: {{ $.Values.kong.plugins.jwt.config.anonymous }}
+          run_on_preflight: {{ $.Values.kong.plugins.jwt.config.runOnPreflight }}
+          maximum_expiration: {{ $.Values.kong.plugins.jwt.config.maximumExpiration }}
+        tags:
+          - auth
+          - jwt
+          - production
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.rateLimiting.enabled }}
+    {{- range .Values.kong.plugins.rateLimiting.services }}
+      - name: rate-limiting
+        enabled: true
+        service: {{ .name }}
+        config:
+          second: {{ .limits.second | default "null" }}
+          minute: {{ .limits.minute }}
+          hour: {{ .limits.hour }}
+          day: {{ .limits.day }}
+          month: {{ .limits.month | default "null" }}
+          year: {{ .limits.year | default "null" }}
+          policy: {{ $.Values.kong.plugins.rateLimiting.policy }}
+          fault_tolerant: {{ $.Values.kong.plugins.rateLimiting.faultTolerant }}
+          hide_client_headers: {{ $.Values.kong.plugins.rateLimiting.hideClientHeaders }}
+          limit_by: {{ $.Values.kong.plugins.rateLimiting.limitBy }}
+          header_name: {{ $.Values.kong.plugins.rateLimiting.headerName }}
+          {{- if eq $.Values.kong.plugins.rateLimiting.policy "redis" }}
+          redis:
+            host: {{ $.Values.kong.plugins.rateLimiting.redis.host }}
+            port: {{ $.Values.kong.plugins.rateLimiting.redis.port }}
+            password: {{ $.Values.kong.plugins.rateLimiting.redis.password }}
+            timeout: {{ $.Values.kong.plugins.rateLimiting.redis.timeout }}
+            database: {{ $.Values.kong.plugins.rateLimiting.redis.database }}
+          {{- end }}
+        tags:
+          - rate-limiting
+          - protection
+          - production
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.requestTransformer.enabled }}
+    {{- range .Values.kong.plugins.requestTransformer.services }}
+      - name: request-transformer
+        enabled: true
+        service: {{ .name | default . }}
+        config:
+          add:
+            headers:
+            {{- range $.Values.kong.plugins.requestTransformer.config.add.headers }}
+              - {{ . }}
+            {{- end }}
+            {{- if .forwardedPrefix }}
+              - X-Forwarded-Prefix:{{ .forwardedPrefix }}
+            {{- end }}
+          {{- if $.Values.kong.plugins.requestTransformer.config.append }}
+          append:
+            headers:
+            {{- range $.Values.kong.plugins.requestTransformer.config.append.headers }}
+              - {{ . }}
+            {{- end }}
+          {{- end }}
+          http_method: null
+        tags:
+          - transformation
+          - headers
+          - production
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.responseTransformer.enabled }}
+    {{- range .Values.kong.plugins.responseTransformer.services }}
+      - name: response-transformer
+        enabled: true
+        service: {{ . }}
+        config:
+          add:
+            headers:
+            {{- range $.Values.kong.plugins.responseTransformer.config.add.headers }}
+              - {{ . }}
+            {{- end }}
+          remove:
+            headers:
+            {{- range $.Values.kong.plugins.responseTransformer.config.remove.headers }}
+              - {{ . }}
+            {{- end }}
+          replace:
+            headers: []
+          rename:
+            headers: []
+          append:
+            headers: []
+        tags:
+          - transformation
+          - response
+          - security
+          - production
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.cors.enabled }}
+    {{- range .Values.kong.plugins.cors.services }}
+      - name: cors
+        enabled: true
+        service: {{ . }}
+        config:
+          origins:
+          {{- range $.Values.kong.plugins.cors.config.origins }}
+            - {{ . | quote }}
+          {{- end }}
+          methods:
+          {{- range $.Values.kong.plugins.cors.config.methods }}
+            - {{ . }}
+          {{- end }}
+          headers:
+          {{- range $.Values.kong.plugins.cors.config.headers }}
+            - {{ . }}
+          {{- end }}
+          exposed_headers:
+          {{- range $.Values.kong.plugins.cors.config.exposedHeaders }}
+            - {{ . }}
+          {{- end }}
+          credentials: {{ $.Values.kong.plugins.cors.config.credentials }}
+          max_age: {{ $.Values.kong.plugins.cors.config.maxAge }}
+          preflight_continue: {{ $.Values.kong.plugins.cors.config.preflightContinue }}
+        tags:
+          - cors
+          - browser
+          - production
+    {{- end }}
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.prometheus.enabled }}
+      - name: prometheus
+        enabled: true
+        config:
+          status_code_metrics: {{ .Values.kong.plugins.prometheus.config.statusCodeMetrics }}
+          latency_metrics: {{ .Values.kong.plugins.prometheus.config.latencyMetrics }}
+          bandwidth_metrics: {{ .Values.kong.plugins.prometheus.config.bandwidthMetrics }}
+          upstream_health_metrics: {{ .Values.kong.plugins.prometheus.config.upstreamHealthMetrics }}
+          per_consumer: {{ .Values.kong.plugins.prometheus.config.perConsumer }}
+        tags:
+          - monitoring
+          - metrics
+          - production
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.botDetection.enabled }}
+      - name: bot-detection
+        enabled: true
+        config:
+          allow:
+          {{- range .Values.kong.plugins.botDetection.config.allow }}
+            - {{ . | quote }}
+          {{- end }}
+          deny:
+          {{- range .Values.kong.plugins.botDetection.config.deny }}
+            - {{ . | quote }}
+          {{- end }}
+        tags:
+          - security
+          - bot-detection
+          - production
+    {{- end }}
+    
+    {{- if .Values.kong.plugins.swaggerIpRestriction.enabled }}
+      - name: pre-function
+        enabled: true
+        config:
+          access:
+            - |
+              local allow = {
+              {{- range .Values.kong.plugins.swaggerIpRestriction.allow }}
+                [{{ . | quote }}] = true,
+              {{- end }}
+              }
+              local function normalize_ip(ip)
+                if not ip or ip == "" then
+                  return nil
+                end
+                ip = string.gsub(ip, "^%s+", "")
+                ip = string.gsub(ip, "%s+$", "")
+                ip = string.gsub(ip, "^::ffff:", "")
+                local host = string.match(ip, "^(%d+%.%d+%.%d+%.%d+):%d+$")
+                if host then
+                  ip = host
+                end
+                return ip
+              end
+              local function add_ip(seen, ips, value)
+                local ip = normalize_ip(value)
+                if ip and not seen[ip] then
+                  seen[ip] = true
+                  ips[#ips + 1] = ip
+                end
+              end
+              local path = string.lower(kong.request.get_path() or "")
+              local is_swagger = false
+              {{- range .Values.kong.plugins.swaggerIpRestriction.pathContains }}
+              if string.find(path, {{ . | lower | quote }}, 1, true) then
+                is_swagger = true
+              end
+              {{- end }}
+              if not is_swagger then
+                return
+              end
+              local seen = {}
+              local candidates = {}
+              add_ip(seen, candidates, kong.client.get_ip())
+              add_ip(seen, candidates, kong.client.get_forwarded_ip())
+              add_ip(seen, candidates, kong.request.get_header("cf-connecting-ip"))
+              add_ip(seen, candidates, kong.request.get_header("true-client-ip"))
+              add_ip(seen, candidates, kong.request.get_header("x-real-ip"))
+              local xff = kong.request.get_header("x-forwarded-for")
+              if xff then
+                for token in string.gmatch(xff, "[^,]+") do
+                  add_ip(seen, candidates, token)
+                end
+              end
+              for i = 1, #candidates do
+                if allow[candidates[i]] then
+                  return
+                end
+              end
+              kong.log.warn("Blocked Swagger access from IPs: ", table.concat(candidates, ","), " path: ", path)
+              return kong.response.exit(403, {
+                message = "Swagger UI is restricted to allowed IPs",
+                client_ip = candidates[1] or "unknown"
+              })
+        tags:
+          - security
+          - swagger
+          - ip-restriction
+          - production
+    {{- end }}
+
+    {{- if .Values.kong.plugins.requestSizeLimiting.enabled }}
+      - name: request-size-limiting
+        enabled: true
+        config:
+          allowed_payload_size: {{ .Values.kong.plugins.requestSizeLimiting.config.allowedPayloadSize }}
+          size_unit: {{ .Values.kong.plugins.requestSizeLimiting.config.sizeUnit }}
+          require_content_length: {{ .Values.kong.plugins.requestSizeLimiting.config.requireContentLength }}
+        tags:
+          - security
+          - request-limiting
+          - production
+    {{- end }}
+{{- end }}

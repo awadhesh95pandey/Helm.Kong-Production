@@ -1,0 +1,24 @@
+apiVersion: v2
+name: kong-gateway
+description: Enterprise Kong API Gateway with Auth0 JWT authentication for NBFC
+type: application
+version: 1.0.0
+appVersion: "3.4"
+home: https://github.com/nbfc/kong-gateway
+sources:
+  - https://github.com/nbfc/kong-gateway
+maintainers:
+  - name: Platform Engineering Team
+    email: platform@nbfc.com
+keywords:
+  - kong
+  - api-gateway
+  - jwt
+  - auth0
+  - kubernetes
+  - gke
+  - nbfc
+dependencies: []
+annotations:
+  category: Infrastructure
+  licenses: Apache-2.0

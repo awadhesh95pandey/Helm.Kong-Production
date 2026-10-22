@@ -1,0 +1,47 @@
+{{- if .Values.kong.declarativeConfig.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-consumers-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "kong-gateway.labels" . | nindent 4 }}
+    app: kong
+    component: consumers-config
+data:
+  consumers.yaml: |
+    _format_version: "3.0"
+    _transform: true
+    
+    consumers:
+    {{- range .Values.kong.consumers }}
+      - username: {{ .username }}
+        custom_id: {{ .customId }}
+        {{- if .tags }}
+        tags:
+        {{- range .tags }}
+          - {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if eq .username "auth0-consumer" }}
+        jwt_secrets:
+          - key: {{ $.Values.kong.jwks.issuer }}
+            secret: "dummy-secret-for-rs256"
+            algorithm: RS256
+            rsa_public_key: |
+              -----BEGIN PUBLIC KEY-----
+              MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArkwl0Ww4WRJEq+/Zkf33
+              YS5fAY0A6USV7JWKCkpA1bybJ8y0PORtkpfC29BoxsLYqA/oVSm+fSP7FzKOUyDI
+              ZQDFeuphvTCzhMIQ62C5Z/8qXVOul5JNWYFna6yMonfZ6dML8aw4a+017MxfD3tW
+              zOJOjcZECWbkp9EubM388T5xCNK1xnBmkfaZbYwtD6i9S/HTmT7Hgd4m17JaQ+3H
+              nod9tfJBpqTo27rfu9eoM3hwgiTCHOoTplhGzan4aucPgWxxdJODMJecGXK6QXVZ
+              IJADkI2gFYD89cBElRfNrSRFZ1HvDQMN5nwArR5fB70HZOZPYd+LpBV+lEUGbTAS
+              owIDAQAB
+              -----END PUBLIC KEY-----
+            tags:
+              - auth0
+              - jwt
+        {{- end }}
+    {{- end }}
+{{- end }}

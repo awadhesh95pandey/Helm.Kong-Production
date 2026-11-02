@@ -423,6 +423,108 @@ kong:
             - nbfc
             - mobilecolending
 
+    # ── PDL QUANTUM API FETCH SERVICE ────────────────────────────────────────────
+    # Public URL: https://api.paisalo.net/quantumapifetch
+    - name: pdl-quantumapifetch-service
+      url: http://pdl-quantumapifetch-service.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - quantumapifetch
+        - dotnet
+      routes:
+        - name: pdl-quantumapifetch-service-route
+          paths:
+            - /quantumapifetch
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - quantumapifetch
+
+    # ── PDL RC POSTING FIRST API ─────────────────────────────────────────────────
+    # Public URL: https://api.paisalo.net/rcpostingfirst
+    - name: pdl-rcpostingfirst-api-service
+      url: http://pdl-rcpostingfirst-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - rcpostingfirst
+        - dotnet
+      routes:
+        - name: pdl-rcpostingfirst-api-route
+          paths:
+            - /rcpostingfirst
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - rcpostingfirst
+
+    # ── PDL RC BULK POSTING API ──────────────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/rcbulkposting
+    - name: pdl-rcbulkposting-api-service
+      url: http://pdl-rcbulkposting-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - rcbulkposting
+        - dotnet
+      routes:
+        - name: pdl-rcbulkposting-api-route
+          paths:
+            - /rcbulkposting
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - rcbulkposting
+
     # ── REACT ERP UI ─────────────────────────────────────────────────────────────
     # Public URL: https://finone.paisalo.in/erp
     # React package.json homepage is /erp, so Kong must keep that prefix.
@@ -618,6 +720,24 @@ kong:
             minute: 50000
             hour: 100000
             day: 1000000
+        - name: pdl-quantumapifetch-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000 
+        - name: pdl-rcpostingfirst-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000 
+        - name: pdl-rcbulkposting-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000 
         - name: react-erp-ui-service
           limits:
             second: 1000
@@ -663,6 +783,12 @@ kong:
           forwardedPrefix: /PDLManagement
         - name: pdl-mobilecolending-api-service
           forwardedPrefix: /mobilecolending
+        - name: pdl-quantumapifetch-service
+          forwardedPrefix: /quantumapifetch
+        - name: pdl-rcpostingfirst-api-service
+          forwardedPrefix: /rcpostingfirst
+        - name: pdl-rcbulkposting-api-service
+          forwardedPrefix: /rcbulkposting
         - name: pdl-mailingmonk-api-service
           forwardedPrefix: /pdlmailing
       config:
@@ -686,6 +812,9 @@ kong:
         - pdl-sod-eod-api-service
         - pdl-managementservice-api-service
         - pdl-mobilecolending-api-service
+        - pdl-quantumapifetch-service
+        - pdl-rcpostingfirst-api-service
+        - pdl-rcbulkposting-api-service
         - pdl-mailingmonk-api-service
       config:
         add:
@@ -713,6 +842,9 @@ kong:
         - pdl-sod-eod-api-service
         - pdl-managementservice-api-service
         - pdl-mobilecolending-api-service
+        - pdl-quantumapifetch-service
+        - pdl-rcpostingfirst-api-service
+        - pdl-rcbulkposting-api-service
         - pdl-mailingmonk-api-service
       config:
         origins:

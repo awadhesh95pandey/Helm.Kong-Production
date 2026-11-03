@@ -525,6 +525,41 @@ kong:
             - nbfc
             - rcbulkposting
 
+    # ── PDL HEAD LENDING VISIT REPORT API ────────────────────────────────────────
+    # Public URL: https://finone.paisalo.in/headlendingvisitreport
+    # Swagger:   https://finone.paisalo.in/headlendingvisitreport/swagger
+    - name: pdl-headlendingvisitreportapi-api-service
+      url: http://pdl-headlendingvisitreportapi-api.prod-erp-services.svc.cluster.local:8080
+      protocol: http
+      port: 8080
+      retries: 3
+      connectTimeout: 60000
+      writeTimeout: 180000
+      readTimeout: 180000
+      tags:
+        - production
+        - nbfc
+        - headlendingvisitreport
+        - dotnet
+      routes:
+        - name: pdl-headlendingvisitreportapi-api-route
+          paths:
+            - /headlendingvisitreport
+          stripPath: true
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - OPTIONS
+          preserveHost: false
+          regexPriority: 0
+          tags:
+            - production
+            - nbfc
+            - headlendingvisitreport
+
     # ── REACT ERP UI ─────────────────────────────────────────────────────────────
     # Public URL: https://finone.paisalo.in/erp
     # React package.json homepage is /erp, so Kong must keep that prefix.
@@ -738,6 +773,12 @@ kong:
             minute: 50000
             hour: 100000
             day: 1000000 
+        - name: pdl-headlendingvisitreportapi-api-service
+          limits:
+            second: 1000
+            minute: 50000
+            hour: 100000
+            day: 1000000
         - name: react-erp-ui-service
           limits:
             second: 1000
@@ -789,6 +830,8 @@ kong:
           forwardedPrefix: /rcpostingfirst
         - name: pdl-rcbulkposting-api-service
           forwardedPrefix: /rcbulkposting
+        - name: pdl-headlendingvisitreportapi-api-service
+          forwardedPrefix: /headlendingvisitreport
         - name: pdl-mailingmonk-api-service
           forwardedPrefix: /pdlmailing
       config:
@@ -815,6 +858,7 @@ kong:
         - pdl-quantumapifetch-service
         - pdl-rcpostingfirst-api-service
         - pdl-rcbulkposting-api-service
+        - pdl-headlendingvisitreportapi-api-service
         - pdl-mailingmonk-api-service
       config:
         add:
@@ -845,6 +889,7 @@ kong:
         - pdl-quantumapifetch-service
         - pdl-rcpostingfirst-api-service
         - pdl-rcbulkposting-api-service
+        - pdl-headlendingvisitreportapi-api-service
         - pdl-mailingmonk-api-service
       config:
         origins:
